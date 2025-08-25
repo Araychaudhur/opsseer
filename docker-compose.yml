@@ -28,6 +28,11 @@ services:
     build:
       context: ./services/toyprod
     container_name: toyprod
+    environment:
+      - FAIL_RATE=0
+      - BASE_DELAY_MS=0
+    ports:
+      - "8000:8000"
     networks: [ops]
 
 networks:
