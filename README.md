@@ -24,3 +24,15 @@ Invoke-WebRequest -UseBasicParsing "http://localhost:8000/chaos?delay_ms=200&fai
 **Dashboards**
 
 * Grafana → Dashboards → *ToyProd Service Overview* (RPS, p95 latency, error rate
+## Milestone M2 — SLO Alerts + Incident Profile
+- Recording rules:
+  - `toyprod:error_rate:ratio_5m`
+  - `toyprod:p95_latency_seconds:5m`
+- Alerts:
+  - `ToyProdHighErrorRate` (>10% for 2m)
+  - `ToyProdHighLatency` (>300ms p95 for 2m)
+- Run incident:
+```powershell
+powershell -ExecutionPolicy Bypass -NoProfile -File .\scripts\incident-profile.ps1 -qps 4
+````
+

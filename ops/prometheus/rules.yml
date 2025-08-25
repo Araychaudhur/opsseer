@@ -1,0 +1,22 @@
+groups:
+- name: toyprod_slo
+  interval: 15s
+  rules:
+  - record: toyprod:error_rate:ratio_5m
+    expr: sum(rate(toyprod_orders_total{result="error"}[5m])) / clamp_min(sum(rate(toyprod_orders_total[5m])), 1e-9)
+  - record: toyprod:p95_latency_seconds:5m
+    expr: histogram_quantile(0.95, sum by (le) (rate(toyprod_request_latency_seconds_bucket{route="/orders"}[5m])))
+  - alert: ToyProdHighErrorRate
+    expr: toyprod:error_rate:ratio_5m > 0.10
+    for: 2m
+    labels: { severity: page }
+    annotations:
+      summary: "ToyProd error rate > 10% (5m)"
+      description: "Investigate toyprod failures. Consider resetting /chaos."
+  - alert: ToyProdHighLatency
+    expr: toyprod:p95_latency_seconds:5m > 0.30
+    for: 2m
+    labels: { severity: ticket }
+    annotations:
+      summary: "ToyProd p95 latency > 300ms (5m)"
+      description: "Investigate latency. Consider adjusting /chaos delay_ms."
