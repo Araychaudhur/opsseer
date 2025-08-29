@@ -43,3 +43,20 @@ powershell -ExecutionPolicy Bypass -NoProfile -File .\scripts\incident-profile.p
   - Tail logs: `docker compose logs -f alertlogger`
   - Prometheus → Alerts firing produce `/alerts` posts.
   - Grafana Contact Point “AlertLogger” test (or real firing) produces `/grafana` posts.
+### Log rotation
+Enabled per-service Docker log rotation (local driver). Default limits:
+- prometheus/grafana: 10MB × 3 files
+- alertmanager/alertlogger/toyprod: 5MB × 3 files
+
+Verify:
+```powershell
+docker inspect alertlogger --format '{{json .HostConfig.LogConfig}}'
+````
+
+Fresh logs for a service:
+
+```powershell
+docker compose rm -sf alertlogger
+docker compose up -d alertlogger
+```
+
