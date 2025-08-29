@@ -1,0 +1,9 @@
+route:
+  receiver: alertlogger
+  group_by: ["alertname"]
+
+receivers:
+  - name: alertlogger
+    webhook_configs:
+      - url: http://alertlogger:9000/alerts
+        send_resolved: true

@@ -1,0 +1,11 @@
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: AlertLogger
+    receivers:
+      - uid: alertlogger-webhook
+        type: webhook
+        settings:
+          url: http://alertlogger:9000/grafana
+          httpMethod: POST
+          maxAlerts: 0

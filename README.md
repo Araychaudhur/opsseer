@@ -36,3 +36,10 @@ Invoke-WebRequest -UseBasicParsing "http://localhost:8000/chaos?delay_ms=200&fai
 powershell -ExecutionPolicy Bypass -NoProfile -File .\scripts\incident-profile.ps1 -qps 4
 ````
 
+## Milestone M3 — Alertmanager + Grafana Alerts
+- Alertmanager at :9093 routes to a local webhook receiver (`alertlogger`).
+- Grafana unified alert "GrafanaErrorRateHigh" notifies the same receiver.
+- Verify:
+  - Tail logs: `docker compose logs -f alertlogger`
+  - Prometheus → Alerts firing produce `/alerts` posts.
+  - Grafana Contact Point “AlertLogger” test (or real firing) produces `/grafana` posts.
