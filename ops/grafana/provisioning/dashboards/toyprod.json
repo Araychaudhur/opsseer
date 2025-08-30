@@ -1,1 +1,49 @@
-{"uid":"toyprod-main","title":"ToyProd Service Overview","editable":true,"schemaVersion":39,"version":1,"time":{"to":"now","from":"now-15m"},"timepicker":{},"panels":[{"datasource":{"type":"prometheus","uid":"prometheus"},"title":"Requests per second (by status)","gridPos":{"y":0,"w":12,"x":0,"h":8},"type":"timeseries","targets":[{"expr":"sum by (status)(rate(toyprod_requests_total[1m]))"}]},{"datasource":{"type":"prometheus","uid":"prometheus"},"title":"p95 latency (seconds)","gridPos":{"y":0,"w":12,"x":12,"h":8},"type":"timeseries","targets":[{"expr":"histogram_quantile(0.95, sum by (le) (rate(toyprod_request_latency_seconds_bucket[5m])))"}]},{"datasource":{"type":"prometheus","uid":"prometheus"},"title":"Error rate (fraction)","gridPos":{"y":8,"w":24,"x":0,"h":8},"type":"timeseries","targets":[{"expr":"sum(rate(toyprod_orders_total{result=\"error\"}[1m])) / clamp_min(sum(rate(toyprod_orders_total[1m])), 1e-9)"}]}],"annotations":{"list":[]},"tags":[],"links":[],"fiscalYearStartMonth":1,"weekStart":""}
+{
+  "id": null,
+  "uid": "toyprod-main",
+  "title": "ToyProd Service Overview",
+  "schemaVersion": 39,
+  "version": 2,
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Requests per second (by status) [/orders]",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A",
+          "expr": "sum by (status) (rate(toyprod_request_latency_seconds_count{route=\"/orders\"}[1m]))"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "p95 latency (seconds) [/orders]",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(toyprod_request_latency_seconds_bucket{route=\"/orders\"}[5m])))"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Error rate (fraction, 5m)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A",
+          "expr": "sum(rate(toyprod_orders_total{result=\"error\"}[5m])) / clamp_min(sum(rate(toyprod_orders_total[5m])), 1e-9)"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 }
+    }
+  ],
+  "annotations": { "list": [] },
+  "fiscalYearStartMonth": 1,
+  "weekStart": ""
+}

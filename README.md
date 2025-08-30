@@ -60,3 +60,7 @@ docker compose rm -sf alertlogger
 docker compose up -d alertlogger
 ```
 
+## M4 — Grafana Image Renderer + Incident capture
+- Renderer sidecar wired (port 8081), anonymous viewer enabled.
+- Render helper: scripts/render_grafana.ps1 → dashboard + panel PNGs into data/dashshots/<ts>/.
+- Incident driver: scripts/incident-profile.ps1 writes data/incidents/<ts>/incident.json (+ PNGs with -Snapshots).

@@ -10,11 +10,7 @@ services:
       - "9090:9090"
     depends_on: [alertmanager]
     networks: [ops]
-    logging:
-      driver: "local"
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: { driver: "local", options: { max-size: "10m", max-file: "3" } }
 
   grafana:
     image: grafana/grafana:10.4.6
@@ -22,17 +18,28 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_RENDERING_SERVER_URL=http://renderer:8081/render
+      - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
+      - GF_LOG_FILTERS=rendering:debug
     volumes:
       - ./ops/grafana/provisioning:/etc/grafana/provisioning
     ports:
       - "3000:3000"
-    depends_on: [prometheus]
+    depends_on: [prometheus, renderer]
     networks: [ops]
-    logging:
-      driver: "local"
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: { driver: "local", options: { max-size: "10m", max-file: "3" } }
+
+  renderer:
+    image: grafana/grafana-image-renderer:3.9.0
+    container_name: renderer
+    environment: [ "ENABLE_METRICS=true" ]
+    ports:
+      - "8081:8081"
+    networks: [ops]
+    logging: { driver: "local", options: { max-size: "5m", max-file: "3" } }
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
@@ -43,40 +50,24 @@ services:
     ports:
       - "9093:9093"
     networks: [ops]
-    logging:
-      driver: "local"
-      options:
-        max-size: "5m"
-        max-file: "3"
+    logging: { driver: "local", options: { max-size: "5m", max-file: "3" } }
 
   alertlogger:
-    build:
-      context: ./services/alertlogger
+    build: { context: ./services/alertlogger }
     container_name: alertlogger
-    ports:
-      - "9000:9000"
+    ports: [ "9000:9000" ]
     networks: [ops]
-    logging:
-      driver: "local"
-      options:
-        max-size: "5m"
-        max-file: "3"
+    logging: { driver: "local", options: { max-size: "5m", max-file: "3" } }
 
   toyprod:
-    build:
-      context: ./services/toyprod
+    build: { context: ./services/toyprod }
     container_name: toyprod
     environment:
       - FAIL_RATE=0
       - BASE_DELAY_MS=0
-    ports:
-      - "8000:8000"
+    ports: [ "8000:8000" ]
     networks: [ops]
-    logging:
-      driver: "local"
-      options:
-        max-size: "5m"
-        max-file: "3"
+    logging: { driver: "local", options: { max-size: "5m", max-file: "3" } }
 
 networks:
   ops:

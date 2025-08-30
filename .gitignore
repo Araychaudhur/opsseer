@@ -18,3 +18,5 @@ node_modules/
 # Docker
 *.log
 data/
+# runtime artifacts
+data/
