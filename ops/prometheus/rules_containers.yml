@@ -1,0 +1,58 @@
+# ops/prometheus/rules_containers.yml
+groups:
+- name: container_stats
+  interval: 15s
+  rules:
+    # CPU usage (%) per service
+    - record: svc:cpu_usage:percent
+      expr: |
+        sum by (svc) (
+          label_replace(
+            (
+              docker_container_cpu_usage_percent
+              * on (container_id) group_left(service)
+              docker_container_service_info
+            ),
+            "svc", "$1", "service", "(.+)"
+          )
+        )
+
+    # Memory usage (bytes) per service
+    - record: svc:mem_usage_bytes
+      expr: |
+        sum by (svc) (
+          label_replace(
+            (
+              docker_container_memory_usage_bytes
+              * on (container_id) group_left(service)
+              docker_container_service_info
+            ),
+            "svc", "$1", "service", "(.+)"
+          )
+        )
+
+    # Memory usage as a percentage of the container's limit
+    - record: svc:mem_usage:percent
+      expr: |
+        sum by (svc) (
+          label_replace(
+            (
+              (
+                docker_container_memory_usage_bytes / docker_container_memory_limit_bytes
+              ) * 100
+              * on (container_id) group_left(service)
+              docker_container_service_info
+            ),
+            "svc", "$1", "service", "(.+)"
+          )
+        )
+
+    # Alert on sustained high memory usage (proxy for OOM risk)
+    - alert: ServiceHighMemoryUsage
+      expr: svc:mem_usage:percent > 95
+      for: 5m
+      labels:
+        severity: ticket
+      annotations:
+        summary: "High memory usage for service {{ $labels.svc }}"
+        description: "Service {{ $labels.svc }} is using over 95% of its allocated memory."

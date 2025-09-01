@@ -1,20 +1,19 @@
 global:
   scrape_interval: 15s
-
 alerting:
   alertmanagers:
-    - static_configs:
-        - targets: ["alertmanager:9093"]
-
+    - static_configs: [{ targets: ["alertmanager:9093"] }]
 rule_files:
-  - rules.yml
-
+  - /etc/prometheus/rules.yml
+  - /etc/prometheus/rules_containers.yml
 scrape_configs:
-  - job_name: "prometheus"
-    static_configs:
-      - targets: ["prometheus:9090"]
-
-  - job_name: "toyprod"
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["toyprod:8000"]
+  - job_name: prometheus
+    static_configs: [{ targets: ["prometheus:9090"] }]
+  - job_name: toyprod
+    static_configs: [{ targets: ["toyprod:8000"] }]
+  - job_name: dockermeta
+    static_configs: [{ targets: ["dockermeta:9101"] }]
+  - job_name: dockerstats
+    scrape_interval: 30s
+    scrape_timeout: 30s
+    static_configs: [{ targets: ["dockerstats:9102"] }]
