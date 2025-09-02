@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+langchain
+langchain-community
+sentence-transformers
+faiss-cpu
+unstructured
+markdown
+torch
+transformers

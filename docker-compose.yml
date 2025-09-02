@@ -94,10 +94,89 @@ services:
     environment:
       - FAIL_RATE=0
       - BASE_DELAY_MS=0
-    ports: ["8000:8000"]
+    ports: ["8080:8000"]
     networks: [ops]
     logging: { driver: "local", options: { max-size: "5m", max-file: "3" } }
+  
+  asr:
+    build:
+      context: ./services/asr
+    container_name: asr
+    ports:
+      - "8001:8000"
+    networks:
+      - ops
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+  
+  vision:
+    build:
+      context: ./services/vision
+    container_name: vision
+    ports:
+      - "8002:8000"
+    networks:
+      - ops
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  docqa:
+    build:
+      context: ./services/docqa
+    container_name: docqa
+    volumes:
+      - ./data/runbooks:/data/runbooks:ro
+    ports:
+      - "8003:8000"
+    networks:
+      - ops
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+  
+  ai-gateway:
+    build:
+      context: ./services/ai-gateway
+    container_name: ai-gateway
+    ports:
+      - "8000:8000"
+    networks:
+      - ops
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+        
 networks:
   ops:
     driver: bridge

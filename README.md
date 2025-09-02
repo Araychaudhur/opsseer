@@ -1,6 +1,6 @@
 ﻿# OpsSeer
 
-An SRE-style AI portfolio project with a "toy prod" service, metrics (Prometheus), dashboards (Grafana), chaos & alerting, LLM services (ASR, DocQA, classifier, forecaster), and an orchestrated incident timeline with assets (audio, runbooks, screenshots).
+An SRE-style AI portfolio project with a "toy prod" service, metrics (Prometheus), dashboards (Grafana), chaos & alerting, and an orchestrated incident timeline powered by a suite of AI microservices.
 
 ## Milestones
 
@@ -10,7 +10,8 @@ An SRE-style AI portfolio project with a "toy prod" service, metrics (Prometheus
 - [x] **M3:** Alertmanager + Grafana Alerting Pipeline
 - [x] **M4:** Grafana Image Renderer + Incident Capture
 - [x] **M5 (Infrastructure):** Per-Service Container Monitoring
-- [ ] **M5 (AI Services):** ML Microservices (ASR, DocQA, etc.)
+- [x] **M5 (AI Services):** Core ML Microservices
+- [x] **Bonus:** Unified AI Gateway
 - [ ] **M6:** Orchestrator + Live Timeline
 - [ ] **M7:** Slack & GitHub Integrations
 - [ ] **M8:** Evaluation Harness
@@ -18,34 +19,25 @@ An SRE-style AI portfolio project with a "toy prod" service, metrics (Prometheus
 
 ---
 
-## Milestone M5 — Per-Service Container Monitoring (Resolved)
+## M5 — AI Services Stack
 
-A key requirement for observing the system during incidents is collecting per-service container metrics (CPU, memory).
+A suite of containerized, GPU-accelerated AI microservices has been developed to provide insights during incidents. All services are unified behind a single **AI Gateway**, which simplifies the architecture and routing.
 
-The initial approach using **cAdvisor** proved incompatible with the host's Docker environment, failing to detect individual containers correctly. After a thorough debugging process, a more robust architectural solution was implemented:
+* **ASR (Audio-to-Text) Service**: Transcribes audio files (e.g., from on-call engineer voice notes) into text using a distilled Whisper model.
+* **Vision (OCR) Service**: Performs Optical Character Recognition on images (e.g., Grafana dashboard screenshots) to extract text using Microsoft's TrOCR model.
+* **DocQA (Document QA) Service**: Answers natural language questions based on a knowledge base of Markdown runbooks using a Retrieval-Augmented Generation (RAG) pipeline.
 
-1.  **cAdvisor was replaced** to eliminate the environmental dependency.
-2.  A new, lightweight **`dockerstats` exporter** was created in Python to fetch metrics directly from the Docker socket API.
-3.  The existing **`dockermeta` exporter** provides the mapping from container IDs to their Compose service names.
-4.  **Prometheus recording rules** now join the data from these two exporters to produce the final `svc:*` metrics for per-service monitoring in Grafana.
-
-This pivot successfully resolved the blocker and established a reliable monitoring foundation for the rest of the project.
+This completes the core AI inference capabilities of the project.
 
 ---
 ## Getting Started
 
 **Services**
-- `toyprod` (FastAPI): `/healthz`, `/orders?count=N`, `/chaos?delay_ms=&fail_rate=`, `/metrics`
-- Prometheus (`:9090`) scrapes all services.
-- Grafana (`:3000`) provides dashboards. Default login is `admin`/`admin`.
+- `ai-gateway` (`:8000`): The primary entry point for all AI service requests.
+- `toyprod` (`:8080`): A sample FastAPI service that can be subjected to chaos engineering.
+- Prometheus (`:9090`) & Grafana (`:3000`).
 
 **Quick start**
 ```powershell
 # Start the full stack
 ./task.ps1 up
-
-# Generate sample traffic
-for ($i=0; $i -lt 60; $i++) { try { Invoke-WebRequest -UseBasicParsing "http://localhost:8000/orders?count=3" | Out-Null } catch {}; Start-Sleep -Milliseconds 250 }
-
-# Trigger a sample incident
-Invoke-WebRequest -UseBasicParsing "http://localhost:8000/chaos?delay_ms=200&fail_rate=0.3" | Out-Null
