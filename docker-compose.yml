@@ -176,7 +176,54 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-        
+  
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=opsseer
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - opsseer-pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - ops
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d opsseer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+  orchestrator:
+    build:
+      context: ./services/orchestrator
+    container_name: orchestrator
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=opsseer
+    ports:
+      - "8004:8000"
+    networks:
+      - ops
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
 networks:
   ops:
     driver: bridge
+
+volumes:
+  opsseer-pgdata:

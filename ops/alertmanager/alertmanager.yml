@@ -5,5 +5,5 @@ route:
 receivers:
   - name: alertlogger
     webhook_configs:
-      - url: http://alertlogger:9000/alerts
+      - url: http://orchestrator:8000/webhook/alert
         send_resolved: true
