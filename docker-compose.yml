@@ -104,6 +104,12 @@ services:
     container_name: asr
     ports:
       - "8001:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; exit(0) if urllib.request.urlopen('http://localhost:8000/healthz').getcode() == 200 else exit(1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
     networks:
       - ops
     deploy:
@@ -125,6 +131,12 @@ services:
     container_name: vision
     ports:
       - "8002:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; exit(0) if urllib.request.urlopen('http://localhost:8000/healthz').getcode() == 200 else exit(1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
     networks:
       - ops
     deploy:
@@ -148,6 +160,12 @@ services:
       - ./data/runbooks:/data/runbooks:ro
     ports:
       - "8003:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; exit(0) if urllib.request.urlopen('http://localhost:8000/healthz').getcode() == 200 else exit(1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
     networks:
       - ops
     deploy:
@@ -169,6 +187,14 @@ services:
     container_name: ai-gateway
     ports:
       - "8000:8000"
+    # Inside the ai-gateway service definition
+    depends_on:
+      docqa:
+        condition: service_healthy
+      asr:
+        condition: service_healthy
+      vision:
+        condition: service_healthy
     networks:
       - ops
     logging:
@@ -202,6 +228,8 @@ services:
         max-size: "10m"
         max-file: "3"
   orchestrator:
+    env_file:
+      - .env
     build:
       context: ./services/orchestrator
     container_name: orchestrator

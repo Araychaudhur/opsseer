@@ -3,3 +3,5 @@ uvicorn
 psycopg2-binary
 SQLAlchemy
 httpx
+slack_sdk
+PyGithub

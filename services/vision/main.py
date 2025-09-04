@@ -13,7 +13,7 @@ ocr_pipeline = pipeline(
     "image-to-text",
     model="microsoft/trocr-base-stage1",
     torch_dtype=torch.float16,
-    device="cuda:0", # Using the GPU
+    device="cpu", # Using the GPU
 )
 
 @app.post("/infer")
