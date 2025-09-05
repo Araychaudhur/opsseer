@@ -1,6 +1,8 @@
 fastapi
 uvicorn
 python-multipart
-torch
-transformers
 Pillow
+easyocr
+torch
+torchvision
+opencv-python-headless

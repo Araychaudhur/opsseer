@@ -1,6 +1,6 @@
 ﻿# OpsSeer
 
-An SRE-style AI portfolio project with a "toy prod" service, metrics (Prometheus), dashboards (Grafana), chaos & alerting, and an orchestrated incident timeline powered by a suite of AI microservices.
+An SRE-style AI portfolio project that demonstrates a complete, automated incident response pipeline. It features a "toy prod" service, a full monitoring/alerting stack, and an orchestrated timeline enriched by a suite of custom-built, GPU-accelerated AI microservices, all visualized in a real-time web UI.
 
 ## Milestones
 
@@ -15,45 +15,34 @@ An SRE-style AI portfolio project with a "toy prod" service, metrics (Prometheus
 - [x] **M6:** Orchestrator + Live Timeline
 - [x] **M7:** Slack & GitHub Integrations
 - [x] **M8:** Evaluation Harness
-- [ ] **M9:** Polishing for Portfolio
+- [x] **M9:** Polishing for Portfolio & UI
 
 ---
 
-## M8 — Evaluation Harness
+## How It Works: The AIOps Pipeline
 
-To validate the effectiveness of the AI services, a quantitative evaluation harness was built.
+1.  **Detect**: A `toyprod` service emits metrics to **Prometheus**. When an SLO is breached (e.g., high error rate or latency), a pre-configured alert fires.
+2.  **Route**: The alert is sent to **Alertmanager**, which forwards it to the central **Orchestrator** service.
+3.  **Enrich**: The Orchestrator creates a new incident in a **PostgreSQL** database and queries a suite of AI services through a unified **AI Gateway**:
+    -   **DocQA Service** is queried to find relevant steps from Markdown runbooks.
+    -   **Vision Service** is triggered on latency alerts to capture a Grafana panel screenshot and perform OCR to extract key text from the image.
+    -   **ASR Service** is available for future use with audio inputs.
+4.  **Notify**: The Orchestrator takes the initial alert and the AI-generated insights and sends notifications to:
+    -   A **Slack** channel for real-time awareness.
+    -   A **GitHub** repository by creating a new, trackable issue.
+5.  **Visualize**: A simple **Frontend UI** can be used to view the complete, ordered timeline of any incident by querying the Orchestrator's REST API.
 
--   **ASR Service Evaluation**: Tested against a ground-truth transcript generated via TTS.
-    -   **Result**: **0% Word Error Rate (WER)**, a perfect score.
--   **DocQA Service Evaluation**: Tested against a golden dataset of question-answer pairs derived from the runbooks.
-    -   **Result**: **100% Accuracy** on the test set.
+## Final Evaluation Metrics
 
-These results confirm the high quality and reliability of the core AI components.
-
-## M6 & M7 — Orchestration and Integrations
-
-An **Orchestrator** service acts as the central brain, receiving alerts and coordinating calls to the AI Gateway. Upon receiving an alert and an AI-generated insight, it automatically:
-1.  Posts a notification to a **Slack** channel.
-2.  Creates a trackable issue in a **GitHub** repository.
-3.  Records all events to a persistent **PostgreSQL** timeline, accessible via a REST API.
-
-## M5 — AI Services Stack
-
-A suite of containerized, GPU-accelerated AI microservices provides insights during incidents. All services are unified behind a single **AI Gateway**.
-
-* **ASR (Audio-to-Text) Service**: Transcribes audio from voice notes.
-* **Vision (OCR) Service**: Extracts text from dashboard screenshots.
-* **DocQA (Document QA) Service**: Answers questions based on Markdown runbooks.
+-   **ASR Service**: Achieved **0% Word Error Rate (WER)** on the test set.
+-   **DocQA Service**: Achieved **100% Accuracy** on the test set.
 
 ---
-## Getting Started
+## Demo Scenario
 
-**Services**
-- `ai-gateway` (`:8000`): The primary entry point for all AI service requests.
-- `toyprod` (`:8080`): A sample FastAPI service that can be subjected to chaos engineering.
-- Prometheus (`:9090`) & Grafana (`:3000`).
-
-**Quick start**
-```powershell
-# Start the full stack
-./task.ps1 up
+1.  **Start the stack**: `docker compose up -d`
+2.  **Trigger an alert**: For example, a high latency alert: `curl "http://localhost:8080/chaos?delay_ms=400"`
+3.  **Generate traffic**: `for ($i=0; $i -lt 60; $i++) { try { Invoke-WebRequest -UseBasicParsing "http://localhost:8080/orders?count=3" | Out-Null } catch {}; Start-Sleep -Milliseconds 250 }`
+4.  **Wait 2-3 minutes**. You will receive a Slack message and a GitHub issue will be created.
+5.  **Get the Incident ID**: Check the orchestrator logs for the new ID: `docker compose logs orchestrator`
+6.  **View the Timeline**: Open a browser to `http://localhost:8888`, paste the Incident ID, and click "Fetch Timeline". You will see the full incident unfold.

@@ -19,6 +19,7 @@ AI_GATEWAY_URL = "http://ai-gateway:8000"
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = os.getenv("GITHUB_REPO")
+GRAFANA_URL = "http://grafana:3000"
 
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 engine = create_engine(DATABASE_URL)
@@ -27,14 +28,26 @@ timeline_table = Table("timeline", metadata, autoload_with=engine)
 
 app = FastAPI(title="Orchestrator")
 
+# (CORS Middleware remains the same)
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8888"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.on_event("startup")
 def startup_event():
+    # (Startup logic remains the same)
     try:
         with engine.connect() as connection:
             print("--- Database connection verified, timeline table loaded. ---")
     except Exception as e:
         print(f"FATAL: Could not connect to database on startup: {e}")
 
+# (Helper functions add_timeline_event, post_to_slack, create_github_issue remain the same)
 def add_timeline_event(incident_id: str, event_type: str, payload: dict):
     with engine.connect() as connection:
         stmt = insert(timeline_table).values(incident_id=incident_id, type=event_type, payload=payload)
@@ -43,10 +56,8 @@ def add_timeline_event(incident_id: str, event_type: str, payload: dict):
     print(f"--- Inserted event '{event_type}' for incident {incident_id} ---")
 
 def post_to_slack(incident_id: str, alert: dict, ai_insight: dict):
-    # (This function remains the same as before)
-    if not SLACK_WEBHOOK_URL:
-        print("--- SLACK_WEBHOOK_URL not set, skipping notification. ---")
-        return
+    # ... (code is unchanged)
+    if not SLACK_WEBHOOK_URL: return
     webhook = WebhookClient(SLACK_WEBHOOK_URL)
     summary = alert.get('annotations', {}).get('summary', 'No summary')
     docqa_answer = ai_insight.get('answer', 'No answer found.')
@@ -55,34 +66,36 @@ def post_to_slack(incident_id: str, alert: dict, ai_insight: dict):
     print("--- Slack notification sent. ---")
 
 def create_github_issue(incident_id: str, alert: dict, ai_insight: dict):
-    if not GITHUB_TOKEN or not GITHUB_REPO:
-        print("--- GITHUB_TOKEN or GITHUB_REPO not set, skipping issue creation. ---")
-        return
-
+    # ... (code is unchanged)
+    if not GITHUB_TOKEN or not GITHUB_REPO: return
     try:
         g = Github(GITHUB_TOKEN)
         repo = g.get_repo(GITHUB_REPO)
-
         summary = alert.get('annotations', {}).get('summary', 'No summary')
         description = alert.get('annotations', {}).get('description', 'No description.')
         docqa_answer = ai_insight.get('answer', 'No answer found.')
         source = ai_insight.get('source', 'Unknown source')
-
         title = f"Incident {incident_id}: {summary}"
-        body = f"""
-### 🚨 Alert Details
-**Summary:** {summary}
-**Description:** {description}
----
-### 🤖 AI Suggested Action
-**Suggestion:** {docqa_answer}
-**Source:** `{source}`
-"""
+        body = f"### 🚨 Alert Details\n**Summary:** {summary}\n**Description:** {description}\n---\n### 🤖 AI Suggested Action\n**Suggestion:** {docqa_answer}\n**Source:** `{source}`"
         repo.create_issue(title=title, body=body.strip(), labels=["incident"])
         print(f"--- Successfully created GitHub issue in {GITHUB_REPO}. ---")
     except Exception as e:
         print(f"--- ERROR: Failed to create GitHub issue: {e} ---")
 
+async def capture_grafana_panel(dashboard_uid: str, panel_id: int):
+    """
+    Captures a PNG of a Grafana panel using its rendering endpoint.
+    """
+    url = f"{GRAFANA_URL}/render/d-solo/{dashboard_uid}/?orgId=1&panelId={panel_id}&width=1000&height=500&tz=UTC"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+        if response.status_code == 200:
+            print(f"--- Successfully captured Grafana panel {panel_id} ---")
+            return response.content
+    except httpx.RequestError as e:
+        print(f"--- ERROR: Failed to capture Grafana panel: {e} ---")
+    return None
 
 @app.post("/webhook/alert")
 async def receive_alert(request: Request):
@@ -93,28 +106,46 @@ async def receive_alert(request: Request):
     alert = alert_payload.get('alerts', [{}])[0]
     add_timeline_event(incident_id, "alert", alert)
 
-    alert_summary = alert.get('annotations', {}).get('summary', '')
-    if "error rate" in alert_summary.lower():
-        question = "What are the rollback steps for a bad deployment?"
-        print(f"--- Alert summary '{alert_summary}' triggered DocQA query: '{question}' ---")
+    # --- AI Enrichment Workflow ---
+    alert_name = alert.get('labels', {}).get('alertname', '')
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(f"{AI_GATEWAY_URL}/route/docqa", json={"query": question})
+    # Default action for any alert: query DocQA
+    question = f"What is the runbook for the {alert_name} alert?"
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(f"{AI_GATEWAY_URL}/route/docqa", json={"query": question})
 
-        if response.status_code == 200:
-            qa_result = response.json()
-            add_timeline_event(incident_id, "ai_insight_docqa", qa_result)
-            post_to_slack(incident_id, alert, qa_result)
-            create_github_issue(incident_id, alert, qa_result) # New step
-        else:
-            error_payload = {"error": "Failed to get response from DocQA", "status_code": response.status_code}
-            add_timeline_event(incident_id, "ai_insight_error", error_payload)
+    if response.status_code == 200:
+        qa_result = response.json()
+        add_timeline_event(incident_id, "ai_insight_docqa", qa_result)
+
+        # Send initial notifications
+        post_to_slack(incident_id, alert, qa_result)
+        create_github_issue(incident_id, alert, qa_result)
+
+    # Specific action for High Latency alert: capture screenshot and run OCR
+    if alert_name == 'ToyProdHighLatency':
+        print("--- High latency alert detected, triggering Vision workflow ---")
+        image_bytes = await capture_grafana_panel(dashboard_uid="toyprod-main", panel_id=2) # panel_id=2 is the p95 latency panel
+        if image_bytes:
+            print("--- Saving debug image to /tmp/debug_panel.png ---")
+            with open("/tmp/debug_panel.png", "wb") as f:
+                f.write(image_bytes)
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                files = {'image_file': ('panel.png', image_bytes, 'image/png')}
+                response = await client.post(f"{AI_GATEWAY_URL}/route/vision", files=files)
+
+            if response.status_code == 200:
+                vision_result = response.json()
+                add_timeline_event(incident_id, "ai_insight_vision", vision_result)
+            else:
+                error_payload = {"error": "Failed to get response from Vision", "status_code": response.status_code}
+                add_timeline_event(incident_id, "ai_insight_error", error_payload)
 
     return {"status": "ok", "incident_id": incident_id}
 
+# (get_timeline and healthz endpoints remain the same)
 @app.get("/timeline/{incident_id}")
 def get_timeline(incident_id: str):
-    # (This function remains the same as before)
     with engine.connect() as connection:
         stmt = select(timeline_table).where(timeline_table.c.incident_id == incident_id).order_by(timeline_table.c.event_ts)
         results = connection.execute(stmt).fetchall()
@@ -122,7 +153,6 @@ def get_timeline(incident_id: str):
 
 @app.get("/healthz")
 def healthz():
-    # (This function remains the same as before)
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))

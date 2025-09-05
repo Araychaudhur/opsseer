@@ -1,39 +1,32 @@
 from fastapi import FastAPI, UploadFile, File
-from transformers import pipeline
-import torch
-from PIL import Image
+import easyocr
 import io
 
-# Initialize the FastAPI app
 app = FastAPI(title="Vision (OCR) Service")
 
-# Load the OCR pipeline from Hugging Face
-# Using Microsoft's TrOCR (Transformer-based OCR)
-ocr_pipeline = pipeline(
-    "image-to-text",
-    model="microsoft/trocr-base-stage1",
-    torch_dtype=torch.float16,
-    device="cpu", # Using the GPU
-)
+# Load the EasyOCR reader. This will download the model on first run.
+# We specify English and tell it to use the GPU.
+print("--- Loading EasyOCR Reader (GPU)... ---")
+reader = easyocr.Reader(['en'], gpu=True)
+print("--- EasyOCR Reader loaded successfully. ---")
+
 
 @app.post("/infer")
 async def infer(image_file: UploadFile = File(...)):
     """
-    Accepts an image file and returns the extracted text.
+    Accepts an image file and returns the extracted text using EasyOCR.
     """
-    # Read the image file content
     image_bytes = await image_file.read()
 
-    # Open the image using Pillow
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    # EasyOCR can work with bytes directly
+    result = reader.readtext(image_bytes)
 
-    # Perform inference. The model returns a list of dictionaries.
-    result = ocr_pipeline(image)
-
-    # Extract the generated text from the first result
-    extracted_text = result[0]['generated_text'] if result else ""
+    # The result is a list of (bounding_box, text, confidence).
+    # We will join all the detected text snippets into a single string.
+    extracted_text = " ".join([text for bbox, text, conf in result])
 
     return {"text": extracted_text}
+
 
 @app.get("/healthz")
 def healthz():

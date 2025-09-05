@@ -249,6 +249,14 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+  frontend:
+    build:
+      context: ./apps/frontend
+    container_name: frontend
+    ports:
+      - "8888:80"
+    networks:
+      - ops
 networks:
   ops:
     driver: bridge
