@@ -13,9 +13,14 @@ An SRE-style AI portfolio project that demonstrates a complete, automated incide
 - [x] **M5 (AI Services):** Core ML Microservices
 - [x] **Bonus:** Unified AI Gateway
 - [x] **M6:** Orchestrator + Live Timeline
-- [x] **M7:** Slack & GitHub Integrations
+- [x] **M7:** Slack (Notifications) & GitHub Integrations
 - [x] **M8:** Evaluation Harness
 - [x] **M9:** Polishing for Portfolio & UI
+
+### Next Steps & Future Enhancements
+- [ ] **M10 (Polish):** Interactive Slack Bot
+- [ ] **M11 (New Feature):** Time-Series Forecasting Service
+- [ ] **M12 (Polish):** Correlate Firing & Resolved Alerts
 
 ---
 
