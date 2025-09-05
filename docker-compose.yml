@@ -257,6 +257,23 @@ services:
       - "8888:80"
     networks:
       - ops
+  
+  slackbot:
+    build:
+      context: ./services/slackbot
+    container_name: slackbot
+    env_file:
+      - .env
+    networks:
+      - ops
+    depends_on:
+      ai-gateway:
+        condition: service_started
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
 networks:
   ops:
     driver: bridge
