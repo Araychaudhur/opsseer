@@ -188,12 +188,15 @@ services:
     ports:
       - "8000:8000"
     # Inside the ai-gateway service definition
+        # Inside the ai-gateway service definition
     depends_on:
       docqa:
         condition: service_healthy
       asr:
         condition: service_healthy
       vision:
+        condition: service_healthy
+      forecaster:
         condition: service_healthy
     networks:
       - ops
@@ -274,6 +277,32 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  forecaster:
+    build:
+      context: ./services/forecaster
+    container_name: forecaster
+    # Inside the forecaster service definition
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    dns:
+      - 8.8.8.8
+    ports:
+      - "8005:8000"
+    networks:
+      - ops
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; exit(0) if urllib.request.urlopen('http://localhost:8000/healthz').getcode() == 200 else exit(1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
+
 networks:
   ops:
     driver: bridge

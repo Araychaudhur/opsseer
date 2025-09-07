@@ -44,6 +44,7 @@ h1 {
 }
 .timeline-event.alert { border-left-color: #dc3545; }
 .timeline-event.ai_insight_docqa { border-left-color: #28a745; }
+.timeline-event.ai_insight_forecast { border-left-color: #ffc107; }
 .event-header {
     display: flex;
     justify-content: space-between;

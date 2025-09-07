@@ -20,6 +20,7 @@ SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = os.getenv("GITHUB_REPO")
 GRAFANA_URL = "http://grafana:3000"
+PROMETHEUS_URL = "http://prometheus:9090"
 
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 engine = create_engine(DATABASE_URL)
@@ -47,7 +48,7 @@ def startup_event():
     except Exception as e:
         print(f"FATAL: Could not connect to database on startup: {e}")
 
-# (Helper functions add_timeline_event, post_to_slack, create_github_issue remain the same)
+# (Helper functions add_timeline_event, post_to_slack, create_github_issue, capture_grafana_panel remain the same)
 def add_timeline_event(incident_id: str, event_type: str, payload: dict):
     with engine.connect() as connection:
         stmt = insert(timeline_table).values(incident_id=incident_id, type=event_type, payload=payload)
@@ -83,9 +84,7 @@ def create_github_issue(incident_id: str, alert: dict, ai_insight: dict):
         print(f"--- ERROR: Failed to create GitHub issue: {e} ---")
 
 async def capture_grafana_panel(dashboard_uid: str, panel_id: int):
-    """
-    Captures a PNG of a Grafana panel using its rendering endpoint.
-    """
+    # ... (code is unchanged)
     url = f"{GRAFANA_URL}/render/d-solo/{dashboard_uid}/?orgId=1&panelId={panel_id}&width=1000&height=500&tz=UTC"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -117,29 +116,39 @@ async def receive_alert(request: Request):
     if response.status_code == 200:
         qa_result = response.json()
         add_timeline_event(incident_id, "ai_insight_docqa", qa_result)
-
-        # Send initial notifications
         post_to_slack(incident_id, alert, qa_result)
         create_github_issue(incident_id, alert, qa_result)
 
-    # Specific action for High Latency alert: capture screenshot and run OCR
+    # Specific actions for different alerts
     if alert_name == 'ToyProdHighLatency':
-        print("--- High latency alert detected, triggering Vision workflow ---")
-        image_bytes = await capture_grafana_panel(dashboard_uid="toyprod-main", panel_id=2) # panel_id=2 is the p95 latency panel
+        print("--- High latency alert detected, triggering Vision and Forecasting workflows ---")
+
+        # Vision Workflow
+        image_bytes = await capture_grafana_panel(dashboard_uid="toyprod-main", panel_id=2)
         if image_bytes:
-            print("--- Saving debug image to /tmp/debug_panel.png ---")
-            with open("/tmp/debug_panel.png", "wb") as f:
-                f.write(image_bytes)
             async with httpx.AsyncClient(timeout=60.0) as client:
                 files = {'image_file': ('panel.png', image_bytes, 'image/png')}
                 response = await client.post(f"{AI_GATEWAY_URL}/route/vision", files=files)
-
             if response.status_code == 200:
-                vision_result = response.json()
-                add_timeline_event(incident_id, "ai_insight_vision", vision_result)
-            else:
-                error_payload = {"error": "Failed to get response from Vision", "status_code": response.status_code}
-                add_timeline_event(incident_id, "ai_insight_error", error_payload)
+                add_timeline_event(incident_id, "ai_insight_vision", response.json())
+
+        # Forecasting Workflow
+        end_time = int(time.time())
+        start_time = end_time - (60 * 60) # 1 hour of history
+        prom_query = f'toyprod:p95_latency_seconds:5m'
+        prom_url = f"{PROMETHEUS_URL}/api/v1/query_range?query={prom_query}&start={start_time}&end={end_time}&step=60s"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            prom_response = await client.get(prom_url)
+
+        if prom_response.status_code == 200:
+            results = prom_response.json()['data']['result']
+            if results:
+                history_values = [float(val[1]) for val in results[0]['values']]
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(f"{AI_GATEWAY_URL}/route/forecaster", json={"history": history_values})
+                if response.status_code == 200:
+                    add_timeline_event(incident_id, "ai_insight_forecast", response.json())
 
     return {"status": "ok", "incident_id": incident_id}
 

@@ -17,19 +17,18 @@ An SRE-style AI portfolio project that demonstrates a complete, automated incide
 - [x] **M8:** Evaluation Harness
 - [x] **M9:** Polishing for Portfolio & UI
 - [x] **M10 (Polish):** Interactive Slack Bot
-
-### Next Steps & Future Enhancements
-- [ ] **M11 (New Feature):** Time-Series Forecasting Service
+- [x] **M11 (New Feature):** Time-Series Forecasting Service
 - [ ] **M12 (Polish):** Correlate Firing & Resolved Alerts
 
 ---
 
-## M10 — Interactive Slack Bot
+## M11 — Time-Series Forecasting Service
+To add proactive capabilities, the system includes a forecasting microservice using the `amazon/chronos-t5-small` model. When a latency alert occurs, the orchestrator queries Prometheus for recent metric history and sends it to this service. The resulting forecast is then added to the incident timeline, providing predictive insight into future SLO breaches.
 
-To create a "human-in-the-loop" workflow, the system includes an interactive Slack bot. Using Slack's Socket Mode, the bot listens for `@mentions` in a channel. An on-call engineer can directly ask the bot questions (e.g., `@OpsSeer Bot what are the rollback steps?`), and the bot will query the DocQA service to provide an immediate, AI-powered answer within the Slack thread.
+## M10 — Interactive Slack Bot
+The system includes an interactive Slack bot using Socket Mode. An on-call engineer can directly ask the bot questions (e.g., `@OpsSeer Bot what are the rollback steps?`), and the bot will query the DocQA service to provide an immediate, AI-powered answer.
 
 ## How It Works: The AIOps Pipeline
-
 1.  **Detect**: A `toyprod` service emits metrics to **Prometheus**. When an SLO is breached, an alert fires.
 2.  **Route**: The alert is sent to **Alertmanager**, which forwards it to the central **Orchestrator**.
 3.  **Enrich**: The Orchestrator creates an incident in a **PostgreSQL** database and queries a suite of AI services through the **AI Gateway**.
@@ -37,15 +36,14 @@ To create a "human-in-the-loop" workflow, the system includes an interactive Sla
 5.  **Visualize**: A **Frontend UI** displays the complete incident timeline.
 
 ## Final Evaluation Metrics
-
 -   **ASR Service**: Achieved **0% Word Error Rate (WER)**.
 -   **DocQA Service**: Achieved **100% Accuracy**.
 
 ---
 ## Demo Scenario
-
 1.  **Start the stack**: `docker compose up -d`
-2.  **Trigger an alert**: `curl "http://localhost:8080/chaos?delay_ms=400"`
+2.  **Trigger an alert**: e.g., high latency: `curl "http://localhost:8080/chaos?delay_ms=400"`
 3.  **Generate traffic**: `for ($i=0; $i -lt 60; $i++) { try { Invoke-WebRequest -UseBasicParsing "http://localhost:8080/orders?count=3" | Out-Null } catch {}; Start-Sleep -Milliseconds 250 }`
 4.  **Wait 2-3 minutes**. You will receive a Slack message and a GitHub issue will be created.
-5.  **Interact with the bot**: In the Slack channel, ask a question like `@OpsSeer Bot what are the rollback steps?` to get an immediate AI response.
+5.  **Get the Incident ID**: `docker compose logs orchestrator`
+6.  **View the Timeline**: Open a browser to `http://localhost:8888`, paste the Incident ID, and click "Fetch Timeline".

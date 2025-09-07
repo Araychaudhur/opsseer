@@ -49,6 +49,13 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (event.type === 'ai_insight_docqa') {
                 title = `🤖 AI Insight: Document QA`;
                 contentHtml = `<p><strong>Suggestion:</strong> ${event.payload.answer}</p><p><strong>Source:</strong> <code>${event.payload.source}</code></p>`;
+            } else if (event.type === 'ai_insight_vision') {
+                title = `👁️ AI Insight: OCR`;
+                contentHtml = `<p><strong>Extracted Text:</strong> ${event.payload.text}</p>`;
+            } else if (event.type === 'ai_insight_forecast') {
+                title = `📈 AI Insight: Time-Series Forecast`;
+                const forecastValues = event.payload.forecast[0].map(val => val.toFixed(3)).join(', ');
+                contentHtml = `<p><strong>Next 12 Steps Forecast:</strong> ${forecastValues}</p>`;
             }
 
             eventElement.innerHTML = `

@@ -8,6 +8,7 @@ SERVICE_URLS = {
     "asr": "http://asr:8000/infer",
     "vision": "http://vision:8000/infer",
     "docqa": "http://docqa:8000/ask",
+    "forecaster": "http://forecaster:8000/forecast",
 }
 
 @app.post("/route/{service_name}")

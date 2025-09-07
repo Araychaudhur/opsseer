@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pydantic
+pandas
+# Use the official library from Amazon Science
+chronos-forecasting
