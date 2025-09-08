@@ -2,6 +2,7 @@ import os
 import time
 import httpx
 import json
+import re
 from fastapi import FastAPI, Request
 from sqlalchemy import create_engine, text, insert, select
 from sqlalchemy.schema import Table, MetaData
@@ -21,6 +22,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = os.getenv("GITHUB_REPO")
 GRAFANA_URL = "http://grafana:3000"
 PROMETHEUS_URL = "http://prometheus:9090"
+LATENCY_SLO = 0.300 # 300ms
 
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 engine = create_engine(DATABASE_URL)
@@ -56,14 +58,23 @@ def add_timeline_event(incident_id: str, event_type: str, payload: dict):
         connection.commit()
     print(f"--- Inserted event '{event_type}' for incident {incident_id} ---")
 
-def post_to_slack(incident_id: str, alert: dict, ai_insight: dict):
-    # ... (code is unchanged)
+def post_to_slack(incident_id: str, alert: dict, ai_insight: dict, proactive_warning: str = ""):
     if not SLACK_WEBHOOK_URL: return
     webhook = WebhookClient(SLACK_WEBHOOK_URL)
     summary = alert.get('annotations', {}).get('summary', 'No summary')
     docqa_answer = ai_insight.get('answer', 'No answer found.')
     source = ai_insight.get('source', 'Unknown source')
-    webhook.send(text=f"New Incident: {summary}", blocks=[{"type": "header", "text": {"type": "plain_text", "text": f":rotating_light: New Incident: {incident_id}"}}, {"type": "section", "fields": [{"type": "mrkdwn", "text": f"*Alert*\n{summary}"}]}, {"type": "section", "text": {"type": "mrkdwn", "text": f"*AI Suggested Action*:\n>{docqa_answer}\n\n*Source*: `{source}`"}}])
+
+    blocks=[
+        {"type": "header", "text": {"type": "plain_text", "text": f":rotating_light: New Incident: {incident_id}"}},
+        {"type": "section", "fields": [{"type": "mrkdwn", "text": f"*Alert*\n{summary}"}]},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*AI Suggested Action*:\n>{docqa_answer}\n\n*Source*: `{source}`"}}
+    ]
+
+    if proactive_warning:
+        blocks.append({ "type": "section", "text": { "type": "mrkdwn", "text": f"⚠️ *Proactive Warning*:\n>{proactive_warning}" }})
+
+    webhook.send(text=f"New Incident: {summary}", blocks=blocks)
     print("--- Slack notification sent. ---")
 
 def create_github_issue(incident_id: str, alert: dict, ai_insight: dict):
@@ -96,6 +107,15 @@ async def capture_grafana_panel(dashboard_uid: str, panel_id: int):
         print(f"--- ERROR: Failed to capture Grafana panel: {e} ---")
     return None
 
+def parse_ocr_text(text: str) -> dict:
+    """Uses regex to find meaningful numbers in the OCR output."""
+    # This regex looks for a number (integer or float) followed by "ms"
+    match = re.search(r"(\d+\.?\d*)\s*ms", text)
+    if match:
+        value_ms = float(match.group(1))
+        return {"metric": "p95_latency", "value": value_ms, "unit": "ms"}
+    return {"raw_text": text}
+
 @app.post("/webhook/alert")
 async def receive_alert(request: Request):
     alert_payload = await request.json()
@@ -113,34 +133,36 @@ async def receive_alert(request: Request):
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(f"{AI_GATEWAY_URL}/route/docqa", json={"query": question})
 
-    if response.status_code == 200:
-        qa_result = response.json()
-        add_timeline_event(incident_id, "ai_insight_docqa", qa_result)
-        post_to_slack(incident_id, alert, qa_result)
-        create_github_issue(incident_id, alert, qa_result)
+    qa_result = response.json() if response.status_code == 200 else {}
+    add_timeline_event(incident_id, "ai_insight_docqa", qa_result)
+
+    # Send a basic notification right away
+    post_to_slack(incident_id, alert, qa_result)
+    create_github_issue(incident_id, alert, qa_result)
 
     # Specific actions for different alerts
     if alert_name == 'ToyProdHighLatency':
         print("--- High latency alert detected, triggering Vision and Forecasting workflows ---")
 
         # Vision Workflow
-        image_bytes = await capture_grafana_panel(dashboard_uid="toyprod-main", panel_id=2)
+        image_bytes = await capture_grafana_panel(dashboard_uid="toyprod-main", panel_id=4) # PANEL ID 4 IS THE NEW STAT PANEL
         if image_bytes:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 files = {'image_file': ('panel.png', image_bytes, 'image/png')}
                 response = await client.post(f"{AI_GATEWAY_URL}/route/vision", files=files)
             if response.status_code == 200:
-                add_timeline_event(incident_id, "ai_insight_vision", response.json())
+                vision_result = response.json()
+                # NEW: Parse the text to make it meaningful
+                parsed_vision_result = parse_ocr_text(vision_result.get("text", ""))
+                add_timeline_event(incident_id, "ai_insight_vision", parsed_vision_result)
 
         # Forecasting Workflow
         end_time = int(time.time())
         start_time = end_time - (60 * 60) # 1 hour of history
         prom_query = f'toyprod:p95_latency_seconds:5m'
         prom_url = f"{PROMETHEUS_URL}/api/v1/query_range?query={prom_query}&start={start_time}&end={end_time}&step=60s"
-
         async with httpx.AsyncClient(timeout=30.0) as client:
             prom_response = await client.get(prom_url)
-
         if prom_response.status_code == 200:
             results = prom_response.json()['data']['result']
             if results:
@@ -148,13 +170,25 @@ async def receive_alert(request: Request):
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(f"{AI_GATEWAY_URL}/route/forecaster", json={"history": history_values})
                 if response.status_code == 200:
-                    add_timeline_event(incident_id, "ai_insight_forecast", response.json())
+                    forecast_result = response.json()
+                    add_timeline_event(incident_id, "ai_insight_forecast", forecast_result)
+
+                    # NEW: Analyze the forecast for proactive warning
+                    proactive_warning = ""
+                    for i, val in enumerate(forecast_result.get("forecast", [])[0]):
+                        if val > LATENCY_SLO:
+                            proactive_warning = f"AI predicts latency will breach the {LATENCY_SLO}s SLO in approximately {i+1} minute(s)."
+                            break
+                    if proactive_warning:
+                        add_timeline_event(incident_id, "ai_proactive_warning", {"warning": proactive_warning})
+                        # You could send a follow-up Slack message here too
 
     return {"status": "ok", "incident_id": incident_id}
 
 # (get_timeline and healthz endpoints remain the same)
 @app.get("/timeline/{incident_id}")
 def get_timeline(incident_id: str):
+    # ... code is unchanged ...
     with engine.connect() as connection:
         stmt = select(timeline_table).where(timeline_table.c.incident_id == incident_id).order_by(timeline_table.c.event_ts)
         results = connection.execute(stmt).fetchall()
@@ -162,6 +196,7 @@ def get_timeline(incident_id: str):
 
 @app.get("/healthz")
 def healthz():
+    # ... code is unchanged ...
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))

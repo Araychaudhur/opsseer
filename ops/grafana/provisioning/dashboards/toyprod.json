@@ -3,7 +3,7 @@
   "uid": "toyprod-main",
   "title": "ToyProd Service Overview",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "time": { "from": "now-15m", "to": "now" },
   "panels": [
     {
@@ -19,6 +19,42 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
     },
     {
+      "id": 4,
+      "type": "stat",
+      "title": "p95 Latency (current)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "options": {
+        "reduceOptions": {
+          "calcs": [ "lastNotNull" ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "area",
+        "colorMode": "background",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.2 },
+              { "color": "red", "value": 0.3 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "toyprod:p95_latency_seconds:5m"
+        }
+      ]
+    },
+    {
       "id": 2,
       "type": "timeseries",
       "title": "p95 latency (seconds) [/orders]",
@@ -28,7 +64,7 @@
           "expr": "histogram_quantile(0.95, sum by (le) (rate(toyprod_request_latency_seconds_bucket{route=\"/orders\"}[5m])))"
         }
       ],
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
     },
     {
       "id": 3,
@@ -40,10 +76,8 @@
           "expr": "sum(rate(toyprod_orders_total{result=\"error\"}[5m])) / clamp_min(sum(rate(toyprod_orders_total[5m])), 1e-9)"
         }
       ],
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 }
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
     }
   ],
-  "annotations": { "list": [] },
-  "fiscalYearStartMonth": 1,
-  "weekStart": ""
+  "annotations": { "list": [] }
 }

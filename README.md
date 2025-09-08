@@ -21,14 +21,12 @@ An SRE-style AI portfolio project that demonstrates a complete, automated incide
 - [ ] **M12 (Polish):** Correlate Firing & Resolved Alerts
 
 ---
+## M11 — Time-Series Forecasting
 
-## M11 — Time-Series Forecasting Service
-To add proactive capabilities, the system includes a forecasting microservice using the `amazon/chronos-t5-small` model. When a latency alert occurs, the orchestrator queries Prometheus for recent metric history and sends it to this service. The resulting forecast is then added to the incident timeline, providing predictive insight into future SLO breaches.
-
-## M10 — Interactive Slack Bot
-The system includes an interactive Slack bot using Socket Mode. An on-call engineer can directly ask the bot questions (e.g., `@OpsSeer Bot what are the rollback steps?`), and the bot will query the DocQA service to provide an immediate, AI-powered answer.
+To make the system proactive, a new **Forecaster** service was added. When a high-latency alert occurs, the orchestrator queries Prometheus for the recent metric history and sends it to this service. The service uses the `amazon/chronos-t5-small` model to predict future values. The orchestrator then analyzes this forecast to issue proactive warnings if a future SLO breach is predicted.
 
 ## How It Works: The AIOps Pipeline
+
 1.  **Detect**: A `toyprod` service emits metrics to **Prometheus**. When an SLO is breached, an alert fires.
 2.  **Route**: The alert is sent to **Alertmanager**, which forwards it to the central **Orchestrator**.
 3.  **Enrich**: The Orchestrator creates an incident in a **PostgreSQL** database and queries a suite of AI services through the **AI Gateway**.
@@ -36,14 +34,16 @@ The system includes an interactive Slack bot using Socket Mode. An on-call engin
 5.  **Visualize**: A **Frontend UI** displays the complete incident timeline.
 
 ## Final Evaluation Metrics
+
 -   **ASR Service**: Achieved **0% Word Error Rate (WER)**.
 -   **DocQA Service**: Achieved **100% Accuracy**.
 
 ---
 ## Demo Scenario
+
 1.  **Start the stack**: `docker compose up -d`
-2.  **Trigger an alert**: e.g., high latency: `curl "http://localhost:8080/chaos?delay_ms=400"`
-3.  **Generate traffic**: `for ($i=0; $i -lt 60; $i++) { try { Invoke-WebRequest -UseBasicParsing "http://localhost:8080/orders?count=3" | Out-Null } catch {}; Start-Sleep -Milliseconds 250 }`
+2.  **Trigger an alert**: For a proactive forecast, use the sine wave latency mode: `curl "http://localhost:8080/chaos?mode=sine&delay_ms=150"`
+3.  **Generate traffic**: `for ($i=0; $i -lt 720; $i++) { try { Invoke-WebRequest -UseBasicParsing "http://localhost:8080/orders?count=3" | Out-Null } catch {}; Start-Sleep -Milliseconds 250 }`
 4.  **Wait 2-3 minutes**. You will receive a Slack message and a GitHub issue will be created.
-5.  **Get the Incident ID**: `docker compose logs orchestrator`
-6.  **View the Timeline**: Open a browser to `http://localhost:8888`, paste the Incident ID, and click "Fetch Timeline".
+5.  **Get the Incident ID**: Check the orchestrator logs for the new ID: `docker compose logs orchestrator`
+6.  **View the Timeline**: Open a browser to `http://localhost:8888`, paste the Incident ID, and click "Fetch Timeline". You will see the full incident unfold with a proactive forecast.
